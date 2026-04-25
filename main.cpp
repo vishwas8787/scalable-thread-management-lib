@@ -14,7 +14,7 @@ int main() {
 
     cout << "=== Thread Pool Started (4 threads) ===\n\n";
 
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 30; i++) {
         TaskType type;
 
         if      (i % 3 == 0) type = TaskType::CPU;
@@ -46,8 +46,16 @@ int main() {
     }
 
     // monitor loop
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < 15; i++) {
         this_thread::sleep_for(chrono::seconds(1));
+
+        if (i == 2) {
+            {
+                lock_guard<mutex> lock(printMutex);
+                cout << "\n>>> Cancelling pending tasks...\n";
+            }
+            pool.cancelPendingTasks();
+        }
 
         int active = pool.getActiveThreads();
         int queued = pool.getQueuedTasks();
@@ -65,6 +73,11 @@ int main() {
         cout << "  CPU Time: " << pool.getCpuTime() << " ms\n";
         cout << "  IO Time: " << pool.getIoTime() << " ms\n";
         cout << "  FIB Time: " << pool.getFibTime() << " ms\n";
+        cout << "  Avg CPU Time: " << pool.getAvgCpuTime() << " ms\n";
+        cout << "  Avg IO Time:  " << pool.getAvgIoTime()  << " ms\n";
+        cout << "  Avg FIB Time: " << pool.getAvgFibTime() << " ms\n";
+        cout << "  Overall Avg:  " << pool.getOverallAvgTime() << " ms\n";
+        cout << "  Throughput:   " << pool.getThroughput() << " tasks/sec\n";
     }
 
     pool.shutdown();
@@ -82,6 +95,11 @@ int main() {
         cout << "  CPU Time: " << pool.getCpuTime() << " ms\n";
         cout << "  IO Time: " << pool.getIoTime() << " ms\n";
         cout << "  FIB Time: " << pool.getFibTime() << " ms\n";
+        cout << "  Avg CPU Time: " << pool.getAvgCpuTime() << " ms\n";
+        cout << "  Avg IO Time:  " << pool.getAvgIoTime()  << " ms\n";
+        cout << "  Avg FIB Time: " << pool.getAvgFibTime() << " ms\n";
+        cout << "  Overall Avg:  " << pool.getOverallAvgTime() << " ms\n";
+        cout << "  Throughput:   " << pool.getThroughput() << " tasks/sec\n";
     }
 
     return 0;

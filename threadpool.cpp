@@ -1,6 +1,7 @@
 #include "threadpool.h"
 #include <stdexcept>
 #include "tasks.h"
+#include <chrono>
 
 ThreadPool::ThreadPool(int numThreads):stop(false),
     activeThreads(0),
@@ -89,17 +90,11 @@ void ThreadPool::shutdown() {
         if (t.joinable()) t.join();
 }
 
-void ThreadPool::incrementTaskType(TaskType type) {
-    switch (type) {
-        case TaskType::CPU:
-            cpuCompleted++;
-            break;
-        case TaskType::IO:
-            ioCompleted++;
-            break;
-        case TaskType::FIB:
-            fibCompleted++;
-            break;
+void ThreadPool::cancelPendingTasks() {
+    std::lock_guard<std::mutex> lock(mtx);
+
+    while (!tasks.empty()) {
+        tasks.pop();
     }
 }
 
@@ -146,4 +141,30 @@ long long ThreadPool::getIoTime() {
 
 long long ThreadPool::getFibTime() {
     return fibTime.load();
+}
+
+double ThreadPool::getAvgCpuTime() {
+    int count = cpuCompleted.load();
+    return count == 0 ? 0 : (double)cpuTime.load() / count;
+}
+
+double ThreadPool::getAvgIoTime() {
+    int count = ioCompleted.load();
+    return count == 0 ? 0 : (double)ioTime.load() / count;
+}
+
+double ThreadPool::getAvgFibTime() {
+    int count = fibCompleted.load();
+    return count == 0 ? 0 : (double)fibTime.load() / count;
+}
+
+double ThreadPool::getOverallAvgTime() {
+    int count = completedTasks.load();
+    return count == 0 ? 0 : (double)totalExecutionTime.load() / count;
+}
+
+double ThreadPool::getThroughput() {
+    double totalTimeSec = totalExecutionTime.load() / 1000.0;
+    if (totalTimeSec == 0) return 0;
+    return completedTasks.load() / totalTimeSec;
 }

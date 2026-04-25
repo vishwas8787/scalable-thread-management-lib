@@ -15,7 +15,7 @@ public:
     ThreadPool(int numThreads);
     ~ThreadPool();
 
-    void submit(std::function<void()> task);
+    void submit(TaskType type, std::function<void()> task, int priority);
     void shutdown();
 
     int getActiveThreads();
@@ -25,8 +25,6 @@ public:
     int getCpuCompleted();
     int getIoCompleted();
     int getFibCompleted();
-    void incrementTaskType(TaskType type);
-    void submit(TaskType type, std::function<void()> task, int priority);
 
     long long getTotalExecutionTime();
 
@@ -34,11 +32,18 @@ public:
     long long getIoTime();
     long long getFibTime();
 
+    double getAvgCpuTime();
+    double getAvgIoTime();
+    double getAvgFibTime();
+    double getOverallAvgTime();
+    double getThroughput();
+
+    void cancelPendingTasks();
+
 private:
     void worker();
 
     std::vector<std::thread> workers;
-    // std::queue<std::function<void()>> tasks;
 
     std::mutex mtx;
     std::condition_variable cv;
@@ -50,7 +55,6 @@ private:
     std::atomic<int> cpuCompleted;
     std::atomic<int> ioCompleted;
     std::atomic<int> fibCompleted;
-    // std::queue<std::pair<TaskType, std::function<void()>>> tasks;
 
     struct Task {
         TaskType type;
