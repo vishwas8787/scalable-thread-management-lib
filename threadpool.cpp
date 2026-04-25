@@ -13,7 +13,6 @@ ThreadPool::ThreadPool(int numThreads):stop(false),
         workers.emplace_back(&ThreadPool::worker, this);
     }
 }
-
 void ThreadPool::worker() {
     while (true) {
         TaskType type;
@@ -24,21 +23,24 @@ void ThreadPool::worker() {
             cv.wait(lock, [this] { return stop || !tasks.empty(); });
             if (stop && tasks.empty()) return;
 
-            type = tasks.front().first;
-            task = std::move(tasks.front().second);
+            Task taskItem = tasks.top();   // 🔥 changed
             tasks.pop();
+
+            type = taskItem.type;
+            task = taskItem.func;
         }
-        // activeThreads++ AFTER lock release — cleaner, no deadlock risk
+
         activeThreads++;
+
         try {
             task();
         } catch (...) {
-            // optional: log error
+            // optional
         }
+
         activeThreads--;
         completedTasks++;
 
-        // 👇 ADD THIS
         switch (type) {
             case TaskType::CPU: cpuCompleted++; break;
             case TaskType::IO:  ioCompleted++;  break;
@@ -47,11 +49,11 @@ void ThreadPool::worker() {
     }
 }
 
-void ThreadPool::submit(TaskType type, std::function<void()> task) {
+void ThreadPool::submit(TaskType type, std::function<void()> task, int priority) {
     {
         std::lock_guard<std::mutex> lock(mtx);
         if (stop) throw std::runtime_error("Cannot submit to stopped pool");
-        tasks.push({type, task});
+        tasks.push({type, task, priority});
     }
     cv.notify_one();
 }

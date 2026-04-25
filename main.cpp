@@ -22,13 +22,24 @@ int main() {
         else                  type = TaskType::FIB;
 
         try {
-            pool.submit(type, [i, type]() {
+            int priority;
+
+            if (type == TaskType::CPU) priority = 3;
+            else if (type == TaskType::IO) priority = 2;
+            else priority = 1;
+
+            pool.submit(type, [i, type, priority]() {
+                {
+                    std::lock_guard<std::mutex> lock(printMutex);
+                    std::cout << "Task " << i 
+                            << " (priority " << priority << ") started\n";
+                }
                 switch (type) {
                     case TaskType::CPU: cpuTask(i); break;
                     case TaskType::IO:  ioTask(i);  break;
                     case TaskType::FIB: fibTask(i); break;
                 }
-            });
+            }, priority);
         } catch (const std::exception& e) {
             cout << "Submit failed: " << e.what() << "\n";
         }

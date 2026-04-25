@@ -26,7 +26,7 @@ public:
     int getIoCompleted();
     int getFibCompleted();
     void incrementTaskType(TaskType type);
-    void submit(TaskType type, std::function<void()> task);
+    void submit(TaskType type, std::function<void()> task, int priority);
 
 private:
     void worker();
@@ -44,7 +44,18 @@ private:
     std::atomic<int> cpuCompleted;
     std::atomic<int> ioCompleted;
     std::atomic<int> fibCompleted;
-    std::queue<std::pair<TaskType, std::function<void()>>> tasks;
+    // std::queue<std::pair<TaskType, std::function<void()>>> tasks;
+
+    struct Task {
+        TaskType type;
+        std::function<void()> func;
+        int priority;
+
+        bool operator<(const Task& other) const {
+            return priority < other.priority; // higher value = higher priority
+        }
+    };
+    std::priority_queue<Task> tasks;
 };
 
 #endif
