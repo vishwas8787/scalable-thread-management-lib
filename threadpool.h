@@ -19,6 +19,7 @@ public:
 
     int getActiveThreads();
     int getQueuedTasks();
+    int getCompletedTasks();
 
 private:
     void worker();
@@ -31,6 +32,7 @@ private:
     bool stop;
 
     std::atomic<int> activeThreads;
+    std::atomic<int> completedTasks;
 };
 
 #endif

@@ -1,6 +1,7 @@
 #include "threadpool.h"
+#include <stdexcept>
 
-ThreadPool::ThreadPool(int numThreads) : stop(false), activeThreads(0) {
+ThreadPool::ThreadPool(int numThreads):stop(false), activeThreads(0), completedTasks(0){
     for (int i = 0; i < numThreads; i++) {
         workers.emplace_back(&ThreadPool::worker, this);
     }
@@ -12,27 +13,27 @@ void ThreadPool::worker() {
 
         {
             std::unique_lock<std::mutex> lock(mtx);
-            cv.wait(lock, [this] {
-                return stop || !tasks.empty();
-            });
-
-            if (stop && tasks.empty())
-                return;
-
+            cv.wait(lock, [this] { return stop || !tasks.empty(); });
+            if (stop && tasks.empty()) return;
             task = std::move(tasks.front());
             tasks.pop();
-            activeThreads++;
         }
-
-        task(); // execute
-
+        // activeThreads++ AFTER lock release — cleaner, no deadlock risk
+        activeThreads++;
+        try {
+            task();
+        } catch (...) {
+            // optional: log error
+        }
         activeThreads--;
+        completedTasks++;
     }
 }
 
 void ThreadPool::submit(std::function<void()> task) {
     {
         std::lock_guard<std::mutex> lock(mtx);
+        if (stop) throw std::runtime_error("Cannot submit to stopped pool"); // ✅ add this
         tasks.push(task);
     }
     cv.notify_one();
@@ -41,15 +42,12 @@ void ThreadPool::submit(std::function<void()> task) {
 void ThreadPool::shutdown() {
     {
         std::lock_guard<std::mutex> lock(mtx);
+        if (stop) return;   // ✅ guard against double-shutdown
         stop = true;
     }
-
     cv.notify_all();
-
-    for (auto &t : workers) {
-        if (t.joinable())
-            t.join();
-    }
+    for (auto& t : workers)
+        if (t.joinable()) t.join();
 }
 
 ThreadPool::~ThreadPool() {
@@ -58,6 +56,10 @@ ThreadPool::~ThreadPool() {
 
 int ThreadPool::getActiveThreads() {
     return activeThreads.load();
+}
+
+int ThreadPool::getCompletedTasks() {
+    return completedTasks.load();
 }
 
 int ThreadPool::getQueuedTasks() {
