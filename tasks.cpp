@@ -5,7 +5,7 @@
 #include <mutex>
 
 // use the same mutex from main.cpp
-extern std::mutex printMutex;
+std::mutex printMutex;
 
 void cpuTask(int id) {
     {
