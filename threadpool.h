@@ -8,6 +8,7 @@
 #include <condition_variable>
 #include <functional>
 #include <atomic>
+#include "tasks.h"
 
 class ThreadPool {
 public:
@@ -21,6 +22,11 @@ public:
     int getQueuedTasks();
     int getCompletedTasks();
 
+    int getCpuCompleted();
+    int getIoCompleted();
+    int getFibCompleted();
+    void incrementTaskType(TaskType type);
+
 private:
     void worker();
 
@@ -33,6 +39,10 @@ private:
 
     std::atomic<int> activeThreads;
     std::atomic<int> completedTasks;
+
+    std::atomic<int> cpuCompleted;
+    std::atomic<int> ioCompleted;
+    std::atomic<int> fibCompleted;
 };
 
 #endif

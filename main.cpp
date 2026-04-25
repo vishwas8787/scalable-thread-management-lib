@@ -1,69 +1,75 @@
 #include <iostream>
-#include "threadpool.h"
 #include <chrono>
 #include <mutex>
+#include "threadpool.h"
+#include "tasks.h"
+#include <thread>
 
 std::mutex printMutex;
 
 using namespace std;
 
-void testTask(int id) {
-    {
-        std::lock_guard<std::mutex> lock(printMutex);
-        std::cout << "Task " << id << " started\n";
-    }
-
-    std::this_thread::sleep_for(std::chrono::seconds(1));
-
-    {
-        std::lock_guard<std::mutex> lock(printMutex);
-        std::cout << "Task " << id << " finished\n";
-    }
-}
-
-void heavyTask(int id) {
-    {
-        std::lock_guard<std::mutex> lock(printMutex);
-        std::cout << "Task " << id << " started\n";
-    }
-
-    std::this_thread::sleep_for(std::chrono::seconds(2));
-
-    {
-        std::lock_guard<std::mutex> lock(printMutex);
-        std::cout << "Task " << id << " finished\n";
-    }
-}
-
 int main() {
-    try {
-        ThreadPool pool(4);
+    ThreadPool pool(4);
 
-        for (int i = 0; i < 10; i++) {
-            pool.submit([i]() {
-                heavyTask(i);
+    cout << "=== Thread Pool Started (4 threads) ===\n\n";
+
+    for (int i = 0; i < 10; i++) {
+        TaskType type;
+        if      (i % 3 == 0) type = TaskType::CPU;
+        else if (i % 3 == 1) type = TaskType::IO;
+        else                  type = TaskType::FIB;
+
+        try {
+            pool.submit([i, type, &pool]() {
+                switch (type) {
+                    case TaskType::CPU:
+                        cpuTask(i);
+                        break;
+                    case TaskType::IO:
+                        ioTask(i);
+                        break;
+                    case TaskType::FIB:
+                        fibTask(i);
+                        break;
+                }
+                pool.incrementTaskType(type);  // ✅ clean
             });
+        } catch (const std::exception& e) {
+            cout << "Submit failed: " << e.what() << "\n";
         }
-
-        for (int i = 0; i < 5; i++) {
-            this_thread::sleep_for(chrono::seconds(1));
-
-            int active = pool.getActiveThreads();
-            int queued = pool.getQueuedTasks();
-            int completed = pool.getCompletedTasks();
-            
-            {
-                std::lock_guard<std::mutex> lock(printMutex);
-                cout << "\n--- STATS ---\n";
-                cout << "Active: " << active << endl;
-                cout << "Queued: " << queued << endl;
-                cout << "Completed: " << completed << endl;
-            }
-        }
-
-        pool.shutdown();
     }
-    catch (const std::exception& e) {
-        std::cout << "Error: " << e.what() << std::endl;
+
+    // monitor loop
+    for (int i = 0; i < 6; i++) {
+        this_thread::sleep_for(chrono::seconds(1));
+
+        int active = pool.getActiveThreads();
+        int queued = pool.getQueuedTasks();
+        int completed = pool.getCompletedTasks();
+
+        lock_guard<mutex> lock(printMutex);
+        cout << "\n--- STATS (t+" << (i+1) << "s) ---\n";
+        cout << "  Active:    " << active << "\n";
+        cout << "  Queued:    " << queued << "\n";
+        cout << "  Completed: " << completed << "\n";
+        cout << "  CPU Completed: " << pool.getCpuCompleted() << "\n";
+        cout << "  IO Completed:  " << pool.getIoCompleted()  << "\n";
+        cout << "  FIB Completed: " << pool.getFibCompleted() << "\n";
     }
+
+    pool.shutdown();
+
+    {
+        lock_guard<mutex> lock(printMutex);
+        cout << "\n=== FINAL STATS ===\n";
+        cout << "  Active:    " << pool.getActiveThreads() << "\n";
+        cout << "  Queued:    " << pool.getQueuedTasks()   << "\n";
+        cout << "  Completed: " << pool.getCompletedTasks()<< "\n";
+        cout << "  CPU Completed: " << pool.getCpuCompleted() << "\n";
+        cout << "  IO Completed:  " << pool.getIoCompleted()  << "\n";
+        cout << "  FIB Completed: " << pool.getFibCompleted() << "\n";
+    }
+
+    return 0;
 }
