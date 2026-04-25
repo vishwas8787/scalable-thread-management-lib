@@ -61,6 +61,10 @@ int main() {
         cout << "  CPU Completed: " << pool.getCpuCompleted() << "\n";
         cout << "  IO Completed:  " << pool.getIoCompleted()  << "\n";
         cout << "  FIB Completed: " << pool.getFibCompleted() << "\n";
+        cout << "  Total Exec Time: " << pool.getTotalExecutionTime() << " ms\n";
+        cout << "  CPU Time: " << pool.getCpuTime() << " ms\n";
+        cout << "  IO Time: " << pool.getIoTime() << " ms\n";
+        cout << "  FIB Time: " << pool.getFibTime() << " ms\n";
     }
 
     pool.shutdown();
@@ -74,6 +78,10 @@ int main() {
         cout << "  CPU Completed: " << pool.getCpuCompleted() << "\n";
         cout << "  IO Completed:  " << pool.getIoCompleted()  << "\n";
         cout << "  FIB Completed: " << pool.getFibCompleted() << "\n";
+        cout << "  Total Exec Time: " << pool.getTotalExecutionTime() << " ms\n";
+        cout << "  CPU Time: " << pool.getCpuTime() << " ms\n";
+        cout << "  IO Time: " << pool.getIoTime() << " ms\n";
+        cout << "  FIB Time: " << pool.getFibTime() << " ms\n";
     }
 
     return 0;

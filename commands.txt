@@ -1,0 +1,9 @@
+g++ -std=c++17 main.cpp threadpool.cpp tasks.cpp -o app ; ./app
+
+git checkout testing
+git add .
+git commit -m "msg"
+git push
+git checkout main
+git merge testing
+git push

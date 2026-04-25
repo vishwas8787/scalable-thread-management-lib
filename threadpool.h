@@ -28,6 +28,12 @@ public:
     void incrementTaskType(TaskType type);
     void submit(TaskType type, std::function<void()> task, int priority);
 
+    long long getTotalExecutionTime();
+
+    long long getCpuTime();
+    long long getIoTime();
+    long long getFibTime();
+
 private:
     void worker();
 
@@ -56,6 +62,12 @@ private:
         }
     };
     std::priority_queue<Task> tasks;
+
+    std::atomic<long long> totalExecutionTime; // in ms
+
+    std::atomic<long long> cpuTime;
+    std::atomic<long long> ioTime;
+    std::atomic<long long> fibTime;
 };
 
 #endif

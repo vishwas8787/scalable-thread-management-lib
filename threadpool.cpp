@@ -7,7 +7,11 @@ ThreadPool::ThreadPool(int numThreads):stop(false),
     completedTasks(0),
     cpuCompleted(0),
     ioCompleted(0),
-    fibCompleted(0){
+    fibCompleted(0),
+    totalExecutionTime(0),
+    cpuTime(0),
+    ioTime(0),
+    fibTime(0){
     
         for (int i = 0; i < numThreads; i++) {
         workers.emplace_back(&ThreadPool::worker, this);
@@ -32,19 +36,35 @@ void ThreadPool::worker() {
 
         activeThreads++;
 
+        auto start = std::chrono::high_resolution_clock::now();
+
         try {
             task();
         } catch (...) {
             // optional
         }
 
+        auto end = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+
         activeThreads--;
         completedTasks++;
 
+        totalExecutionTime += duration;
+
         switch (type) {
-            case TaskType::CPU: cpuCompleted++; break;
-            case TaskType::IO:  ioCompleted++;  break;
-            case TaskType::FIB: fibCompleted++; break;
+            case TaskType::CPU: 
+                cpuCompleted++;
+                cpuTime += duration;
+                break;
+            case TaskType::IO:  
+                ioCompleted++;
+                ioTime += duration;
+                break;
+            case TaskType::FIB: 
+                fibCompleted++;
+                fibTime += duration;
+                break;
         }
     }
 }
@@ -110,4 +130,20 @@ int ThreadPool::getIoCompleted() {
 
 int ThreadPool::getFibCompleted() {
     return fibCompleted.load();
+}
+
+long long ThreadPool::getTotalExecutionTime() {
+    return totalExecutionTime.load();
+}
+
+long long ThreadPool::getCpuTime() {
+    return cpuTime.load();
+}
+
+long long ThreadPool::getIoTime() {
+    return ioTime.load();
+}
+
+long long ThreadPool::getFibTime() {
+    return fibTime.load();
 }
