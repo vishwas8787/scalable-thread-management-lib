@@ -26,12 +26,13 @@ public:
     int getIoCompleted();
     int getFibCompleted();
     void incrementTaskType(TaskType type);
+    void submit(TaskType type, std::function<void()> task);
 
 private:
     void worker();
 
     std::vector<std::thread> workers;
-    std::queue<std::function<void()>> tasks;
+    // std::queue<std::function<void()>> tasks;
 
     std::mutex mtx;
     std::condition_variable cv;
@@ -43,6 +44,7 @@ private:
     std::atomic<int> cpuCompleted;
     std::atomic<int> ioCompleted;
     std::atomic<int> fibCompleted;
+    std::queue<std::pair<TaskType, std::function<void()>>> tasks;
 };
 
 #endif

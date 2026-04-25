@@ -16,24 +16,18 @@ int main() {
 
     for (int i = 0; i < 10; i++) {
         TaskType type;
+
         if      (i % 3 == 0) type = TaskType::CPU;
         else if (i % 3 == 1) type = TaskType::IO;
         else                  type = TaskType::FIB;
 
         try {
-            pool.submit([i, type, &pool]() {
+            pool.submit(type, [i, type]() {
                 switch (type) {
-                    case TaskType::CPU:
-                        cpuTask(i);
-                        break;
-                    case TaskType::IO:
-                        ioTask(i);
-                        break;
-                    case TaskType::FIB:
-                        fibTask(i);
-                        break;
+                    case TaskType::CPU: cpuTask(i); break;
+                    case TaskType::IO:  ioTask(i);  break;
+                    case TaskType::FIB: fibTask(i); break;
                 }
-                pool.incrementTaskType(type);  // ✅ clean
             });
         } catch (const std::exception& e) {
             cout << "Submit failed: " << e.what() << "\n";
