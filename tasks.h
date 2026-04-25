@@ -1,3 +1,5 @@
+// tasks.h
+
 #ifndef TASKS_H
 #define TASKS_H
 
@@ -12,3 +14,5 @@ void ioTask(int id);
 void fibTask(int id);
 
 #endif
+
+// tasks.h

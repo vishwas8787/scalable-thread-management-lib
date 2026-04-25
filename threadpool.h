@@ -39,6 +39,7 @@ public:
     double getThroughput();
 
     void cancelPendingTasks();
+    int getNumThreads();
 
 private:
     void worker();

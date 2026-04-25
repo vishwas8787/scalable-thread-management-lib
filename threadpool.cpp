@@ -1,3 +1,5 @@
+// threadpool.cpp
+
 #include "threadpool.h"
 #include <stdexcept>
 #include "tasks.h"
@@ -168,3 +170,9 @@ double ThreadPool::getThroughput() {
     if (totalTimeSec == 0) return 0;
     return completedTasks.load() / totalTimeSec;
 }
+
+int ThreadPool::getNumThreads() {
+    return workers.size();
+}
+
+// threadpool.cpp

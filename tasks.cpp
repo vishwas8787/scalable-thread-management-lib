@@ -1,3 +1,5 @@
+// tasks.cpp
+
 #include "tasks.h"
 #include <iostream>
 #include <thread>
@@ -5,7 +7,7 @@
 #include <mutex>
 
 // use the same mutex from main.cpp
-std::mutex printMutex;
+extern std::mutex printMutex;
 
 void cpuTask(int id) {
     {
@@ -55,3 +57,5 @@ void fibTask(int id) {
         std::cout << "[FIB] Task " << id << " finished\n";
     }
 }
+
+// tasks.cpp

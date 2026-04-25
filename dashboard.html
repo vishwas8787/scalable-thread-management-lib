@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Thread Pool Monitor</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
+
+  :root {
+    --bg:     #030b14;
+    --panel:  #070f1a;
+    --border: #0d2137;
+    --cyan:   #00e5ff;
+    --green:  #00ff88;
+    --yellow: #ffd600;
+    --red:    #ff3d5a;
+    --purple: #b04fff;
+    --text:   #dff0ff;
+    --dim:    #6a90b0;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.06) 2px, rgba(0,0,0,0.06) 4px);
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 18px 32px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: linear-gradient(90deg, rgba(0,229,255,0.05), transparent);
+  }
+
+  .logo {
+    font-family: 'Orbitron', monospace;
+    font-size: 1.4rem;
+    font-weight: 900;
+    color: var(--cyan);
+    letter-spacing: 3px;
+    text-shadow: 0 0 6px rgba(0,229,255,0.3);
+  }
+
+  .header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+
+  .thread-badge {
+    font-size: 0.7rem;
+    letter-spacing: 2px;
+    color: var(--yellow);
+    border: 1px solid var(--yellow);
+    padding: 3px 10px;
+    border-radius: 2px;
+  }
+
+  .status-label { font-size: 0.75rem; color: var(--green); letter-spacing: 2px; }
+
+  .status-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 10px var(--green);
+    animation: pulse 1.5s infinite;
+  }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  main {
+    padding: 24px 32px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    max-width: 1300px;
+    margin: 0 auto;
+  }
+
+  .stat-row {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 20px 24px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--accent, var(--cyan));
+    box-shadow: 0 0 10px var(--accent, var(--cyan));
+  }
+
+  .card:hover { border-color: var(--accent, var(--cyan)); }
+
+  .card-label { font-size: 0.62rem; letter-spacing: 3px; color: #8ab8d8; text-transform: uppercase; margin-bottom: 8px; }
+
+  .card-value {
+    font-family: 'Orbitron', monospace;
+    font-size: 2.4rem;
+    font-weight: 700;
+    color: var(--accent, var(--cyan));
+    text-shadow: 0 0 8px var(--accent, var(--cyan));
+    line-height: 1;
+  }
+
+  .card-sub { font-size: 0.68rem; color: #7aaac8; margin-top: 6px; }
+
+  /* breakdown */
+  .breakdown {
+    grid-column: 1 / -1;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 20px 24px;
+  }
+
+  .section-title { font-size: 0.62rem; letter-spacing: 3px; color: #8ab8d8; text-transform: uppercase; margin-bottom: 14px; }
+
+  .task-bars { display: flex; flex-direction: column; gap: 12px; }
+
+  .bar-row { display: grid; grid-template-columns: 60px 1fr 60px; align-items: center; gap: 12px; }
+
+  .bar-label { font-size: 0.75rem; letter-spacing: 1px; }
+
+  .bar-track { height: 8px; background: var(--border); border-radius: 2px; overflow: hidden; }
+
+  .bar-fill { height: 100%; border-radius: 2px; transition: width 0.4s ease; box-shadow: 0 0 6px currentColor; }
+
+  .bar-count { font-size: 0.75rem; text-align: right; }
+
+  /* avg timing */
+  .timing-grid {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+
+  .timing-card { background: var(--panel); border: 1px solid var(--border); border-radius: 4px; padding: 14px 16px; text-align: center; }
+
+  .timing-label { font-size: 0.58rem; letter-spacing: 2px; color: #8ab8d8; text-transform: uppercase; margin-bottom: 6px; }
+
+  .timing-value { font-family: 'Orbitron', monospace; font-size: 1.1rem; font-weight: 700; }
+
+  .timing-unit { font-size: 0.58rem; color: #7aaac8; margin-top: 3px; }
+
+  /* exec totals */
+  .exec-panel {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+
+  .exec-card { background: var(--panel); border: 1px solid var(--border); border-radius: 4px; padding: 14px 16px; }
+
+  .exec-label { font-size: 0.58rem; letter-spacing: 2px; color: #8ab8d8; text-transform: uppercase; margin-bottom: 6px; }
+
+  .exec-value { font-family: 'Orbitron', monospace; font-size: 1rem; font-weight: 700; }
+
+  .exec-unit { font-size: 0.58rem; color: #7aaac8; margin-top: 3px; }
+
+  /* chart */
+  .chart-panel { grid-column: 1 / -1; background: var(--panel); border: 1px solid var(--border); border-radius: 4px; padding: 16px 20px; }
+
+  canvas#throughputChart { width: 100% !important; height: 80px !important; display: block; }
+
+  /* controls */
+  .controls {
+    grid-column: 1 / -1;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 16px 20px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .ctrl-group { display: flex; align-items: center; gap: 8px; }
+
+  .ctrl-divider { width: 1px; height: 28px; background: var(--border); margin: 0 6px; }
+
+  .btn {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.78rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 9px 18px;
+    border-radius: 3px;
+    border: 1px solid;
+    cursor: pointer;
+    background: transparent;
+    transition: all 0.15s;
+  }
+
+  .btn-submit { border-color: var(--green); color: var(--green); }
+  .btn-submit:hover { background: var(--green); color: var(--bg); box-shadow: 0 0 18px rgba(0,255,136,0.4); }
+
+  .btn-cancel { border-color: var(--yellow); color: var(--yellow); }
+  .btn-cancel:hover { background: var(--yellow); color: var(--bg); box-shadow: 0 0 18px rgba(255,214,0,0.4); }
+
+  .btn-reset { border-color: var(--red); color: var(--red); }
+  .btn-reset:hover { background: var(--red); color: var(--bg); box-shadow: 0 0 18px rgba(255,61,90,0.4); }
+
+  .count-input {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.8rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--cyan);
+    padding: 9px 10px;
+    border-radius: 3px;
+    width: 70px;
+    text-align: center;
+  }
+
+  .count-input:focus { outline: none; border-color: var(--cyan); }
+
+  .count-label { font-size: 0.68rem; color: #8ab8d8; letter-spacing: 1px; }
+
+  /* log */
+  .log-panel { grid-column: 1 / -1; background: var(--panel); border: 1px solid var(--border); border-radius: 4px; padding: 16px 20px; }
+
+  #log { height: 110px; overflow-y: auto; font-size: 0.72rem; line-height: 1.8; }
+  #log::-webkit-scrollbar { width: 4px; }
+  #log::-webkit-scrollbar-track { background: var(--border); }
+  #log::-webkit-scrollbar-thumb { background: var(--dim); }
+
+  .log-entry { color: var(--text); }
+  .log-entry.ok   { color: var(--green); }
+  .log-entry.warn { color: var(--yellow); }
+  .log-entry.err  { color: var(--red); }
+
+  .footer { text-align: center; padding: 14px; font-size: 0.62rem; color: #7aaac8; letter-spacing: 2px; border-top: 1px solid var(--border); margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">THREADPOOL//MONITOR</div>
+  <div class="header-right">
+    <div class="thread-badge" id="threadBadge">4 THREADS</div>
+    <span class="status-label">LIVE</span>
+    <div class="status-dot"></div>
+  </div>
+</header>
+
+<main>
+
+  <!-- Big 3 -->
+  <div class="stat-row">
+    <div class="card" style="--accent: var(--green)">
+      <div class="card-label">Active Threads</div>
+      <div class="card-value" id="active">0</div>
+      <div class="card-sub" id="workerSub">of 4 workers</div>
+    </div>
+    <div class="card" style="--accent: var(--yellow)">
+      <div class="card-label">Queued Tasks</div>
+      <div class="card-value" id="queued">0</div>
+      <div class="card-sub">pending execution</div>
+    </div>
+    <div class="card" style="--accent: var(--cyan)">
+      <div class="card-label">Completed</div>
+      <div class="card-value" id="completed">0</div>
+      <div class="card-sub">total tasks done</div>
+    </div>
+  </div>
+
+  <!-- Task type breakdown -->
+  <div class="breakdown">
+    <div class="section-title">Task Type Breakdown</div>
+    <div class="task-bars">
+      <div class="bar-row">
+        <div class="bar-label" style="color:var(--green)">CPU</div>
+        <div class="bar-track"><div class="bar-fill" id="cpuBar" style="width:0%;background:var(--green)"></div></div>
+        <div class="bar-count" id="cpuCount" style="color:var(--green)">0</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label" style="color:var(--cyan)">I/O</div>
+        <div class="bar-track"><div class="bar-fill" id="ioBar" style="width:0%;background:var(--cyan)"></div></div>
+        <div class="bar-count" id="ioCount" style="color:var(--cyan)">0</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label" style="color:var(--purple)">FIB</div>
+        <div class="bar-track"><div class="bar-fill" id="fibBar" style="width:0%;background:var(--purple)"></div></div>
+        <div class="bar-count" id="fibCount" style="color:var(--purple)">0</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Avg times -->
+  <div class="timing-grid">
+    <div class="timing-card">
+      <div class="timing-label">Avg CPU Time</div>
+      <div class="timing-value" id="avgCpu" style="color:var(--green)">—</div>
+      <div class="timing-unit">ms / task</div>
+    </div>
+    <div class="timing-card">
+      <div class="timing-label">Avg I/O Time</div>
+      <div class="timing-value" id="avgIo" style="color:var(--cyan)">—</div>
+      <div class="timing-unit">ms / task</div>
+    </div>
+    <div class="timing-card">
+      <div class="timing-label">Avg FIB Time</div>
+      <div class="timing-value" id="avgFib" style="color:var(--purple)">—</div>
+      <div class="timing-unit">ms / task</div>
+    </div>
+    <div class="timing-card">
+      <div class="timing-label">Overall Avg</div>
+      <div class="timing-value" id="overallAvg" style="color:var(--text)">—</div>
+      <div class="timing-unit">ms / task</div>
+    </div>
+  </div>
+
+  <!-- Total exec times -->
+  <div class="exec-panel">
+    <div class="exec-card">
+      <div class="exec-label">Total Exec Time</div>
+      <div class="exec-value" id="totalTime" style="color:var(--text)">0</div>
+      <div class="exec-unit">ms</div>
+    </div>
+    <div class="exec-card">
+      <div class="exec-label">CPU Total</div>
+      <div class="exec-value" id="cpuTime" style="color:var(--green)">0</div>
+      <div class="exec-unit">ms</div>
+    </div>
+    <div class="exec-card">
+      <div class="exec-label">I/O Total</div>
+      <div class="exec-value" id="ioTime" style="color:var(--cyan)">0</div>
+      <div class="exec-unit">ms</div>
+    </div>
+    <div class="exec-card">
+      <div class="exec-label">FIB Total</div>
+      <div class="exec-value" id="fibTime" style="color:var(--purple)">0</div>
+      <div class="exec-unit">ms</div>
+    </div>
+  </div>
+
+  <!-- Throughput chart -->
+  <div class="chart-panel">
+    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center">
+      <span>Throughput History</span>
+      <span id="tpLive" style="color:var(--yellow);font-size:0.75rem;font-family:'Orbitron',monospace"></span>
+    </div>
+    <canvas id="throughputChart"></canvas>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <div class="ctrl-group">
+      <span class="count-label">TASKS:</span>
+      <input class="count-input" id="taskCount" type="number" value="10" min="1" max="100">
+      <button class="btn btn-submit" onclick="submitTasks()">▶ Submit</button>
+      <button class="btn btn-cancel" onclick="cancelTasks()">⏹ Cancel</button>
+    </div>
+    <div class="ctrl-divider"></div>
+    <div class="ctrl-group">
+      <span class="count-label">THREADS:</span>
+      <input class="count-input" id="threadCount" type="number" value="4" min="1" max="256">
+      <button class="btn btn-reset" onclick="resetPool()">↺ Apply &amp; Reset</button>
+    </div>
+  </div>
+
+  <!-- Log -->
+  <div class="log-panel">
+    <div class="section-title" style="margin-bottom:10px">Activity Log</div>
+    <div id="log"></div>
+  </div>
+
+</main>
+
+<div class="footer">THREAD POOL MONITOR &nbsp;|&nbsp; CSE316 OS PROJECT &nbsp;|&nbsp; PORT 8080</div>
+
+<script>
+  const API = 'http://localhost:8080';
+  const tpHistory = new Array(40).fill(0);
+  let currentThreads = 4;
+
+  function log(msg, type = '') {
+    const el = document.getElementById('log');
+    const now = new Date().toLocaleTimeString();
+    el.innerHTML += `<div class="log-entry ${type}">[${now}] ${msg}</div>`;
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function fmt(val) {
+    if (val === undefined || val === null) return '—';
+    if (val === 0) return '0';
+    return Number(val).toFixed(1);
+  }
+
+  function fmtMs(val) {
+    if (!val) return '0';
+    return val >= 1000 ? (val / 1000).toFixed(2) + 's' : val + 'ms';
+  }
+
+  async function fetchStats() {
+    try {
+      const res = await fetch(`${API}/stats`);
+      const d   = await res.json();
+
+      // big 3
+      document.getElementById('active').textContent    = d.active;
+      document.getElementById('queued').textContent    = d.queued;
+      document.getElementById('completed').textContent = d.completed;
+
+      // sync thread count from server — source of truth
+      if (d.numThreads && d.numThreads !== currentThreads) {
+        currentThreads = d.numThreads;
+        document.getElementById('threadBadge').textContent = currentThreads + ' THREADS';
+        document.getElementById('workerSub').textContent   = 'of ' + currentThreads + ' workers';
+        document.getElementById('threadCount').value       = currentThreads;
+      }
+
+      // task type counts + bars
+      document.getElementById('cpuCount').textContent = d.cpu;
+      document.getElementById('ioCount').textContent  = d.io;
+      document.getElementById('fibCount').textContent = d.fib;
+
+      const total = Math.max(d.completed, 1);
+      document.getElementById('cpuBar').style.width = (d.cpu / total * 100) + '%';
+      document.getElementById('ioBar').style.width  = (d.io  / total * 100) + '%';
+      document.getElementById('fibBar').style.width = (d.fib / total * 100) + '%';
+
+      // avg times
+      document.getElementById('avgCpu').textContent    = fmt(d.avgCpu);
+      document.getElementById('avgIo').textContent     = fmt(d.avgIo);
+      document.getElementById('avgFib').textContent    = fmt(d.avgFib);
+      document.getElementById('overallAvg').textContent = fmt(d.overallAvg);
+
+      // total exec times
+      document.getElementById('totalTime').textContent = fmtMs(d.totalTime);
+      document.getElementById('cpuTime').textContent   = fmtMs(d.cpuTime);
+      document.getElementById('ioTime').textContent    = fmtMs(d.ioTime);
+      document.getElementById('fibTime').textContent   = fmtMs(d.fibTime);
+
+      // throughput
+      document.getElementById('tpLive').textContent =
+        d.throughput ? fmt(d.throughput) + ' tasks/sec' : '';
+
+      tpHistory.push(d.throughput || 0);
+      tpHistory.shift();
+      drawChart();
+
+    } catch(e) { /* server not up yet */ }
+  }
+
+  function drawChart() {
+    const canvas = document.getElementById('throughputChart');
+    const ctx    = canvas.getContext('2d');
+    canvas.width  = canvas.offsetWidth;
+    canvas.height = 80;
+
+    const w = canvas.width, h = canvas.height;
+    const max = Math.max(...tpHistory, 1);
+    const step = w / (tpHistory.length - 1);
+
+    ctx.clearRect(0, 0, w, h);
+
+    // grid lines
+    ctx.strokeStyle = 'rgba(13,33,55,0.9)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const y = (h / 4) * i;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+    }
+
+    // fill
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, 'rgba(0,229,255,0.25)');
+    grad.addColorStop(1, 'rgba(0,229,255,0)');
+
+    ctx.beginPath();
+    ctx.moveTo(0, h);
+    tpHistory.forEach((v, i) => ctx.lineTo(i * step, h - (v / max) * (h - 8)));
+    ctx.lineTo(w, h);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // line
+    ctx.beginPath();
+    ctx.strokeStyle = '#00e5ff';
+    ctx.lineWidth = 2;
+    ctx.shadowColor = '#00e5ff';
+    ctx.shadowBlur = 6;
+    tpHistory.forEach((v, i) => {
+      const x = i * step, y = h - (v / max) * (h - 8);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+  }
+
+  async function submitTasks() {
+    const count = document.getElementById('taskCount').value || 10;
+    try {
+      const res = await fetch(`${API}/submit?count=${count}`);
+      const d   = await res.json();
+      log(`Submitted ${d.count} tasks — pool has ${currentThreads} thread(s)`, 'ok');
+    } catch(e) {
+      log('Failed to reach server — is it running?', 'err');
+    }
+  }
+
+  async function cancelTasks() {
+    try {
+      await fetch(`${API}/cancel`);
+      log('Pending tasks cancelled', 'warn');
+    } catch(e) {
+      log('Cancel failed', 'err');
+    }
+  }
+
+  async function resetPool() {
+    const threads = parseInt(document.getElementById('threadCount').value) || 4;
+    try {
+      await fetch(`${API}/reset?threads=${threads}`);
+      currentThreads = threads;
+      document.getElementById('threadBadge').textContent = threads + ' THREADS';
+      document.getElementById('workerSub').textContent   = 'of ' + threads + ' workers';
+      tpHistory.fill(0);
+      log(`Pool reset — now running with ${threads} thread(s)`, 'warn');
+    } catch(e) {
+      log('Reset failed — is server running?', 'err');
+    }
+  }
+
+  log('Dashboard started — connecting to server...', 'ok');
+  fetchStats();
+  setInterval(fetchStats, 1000);
+</script>
+</body>
+</html>

@@ -1,5 +1,7 @@
 g++ -std=c++17 main.cpp threadpool.cpp tasks.cpp -o app ; ./app
 
+g++ -std=c++17 server.cpp threadpool.cpp tasks.cpp -o server -lws2_32
+
 git checkout testing
 git add .
 git commit -m "msg"

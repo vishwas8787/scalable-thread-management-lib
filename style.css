@@ -1,21 +1,75 @@
 body {
-    font-family: Arial;
-    background: #111;
-    color: #eee;
-    text-align: center;
+  margin: 0;
+  font-family: 'Segoe UI', sans-serif;
+  background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+  color: white;
+}
+
+header {
+  text-align: center;
+  padding: 20px;
+  font-size: 22px;
+}
+
+.container {
+  padding: 20px;
+}
+
+.controls {
+  text-align: center;
+  margin-bottom: 20px;
 }
 
 button {
-    padding: 10px;
-    margin: 10px;
-    font-size: 16px;
-    cursor: pointer;
+  padding: 10px 20px;
+  margin: 10px;
+  border: none;
+  border-radius: 8px;
+  background: #00c6ff;
+  color: black;
+  font-weight: bold;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+button:hover {
+  background: #0072ff;
+  color: white;
+}
+
+.cards {
+  display: flex;
+  justify-content: space-around;
+  margin-bottom: 30px;
 }
 
 .card {
-    margin-top: 20px;
-    padding: 20px;
-    background: #222;
-    border-radius: 10px;
-    display: inline-block;
+  background: rgba(255,255,255,0.1);
+  padding: 20px;
+  border-radius: 15px;
+  text-align: center;
+  width: 25%;
+  backdrop-filter: blur(10px);
+}
+
+.card p {
+  font-size: 28px;
+  margin-top: 10px;
+}
+
+.charts {
+  margin: 20px auto;
+  width: 80%;
+}
+
+.log {
+  margin-top: 30px;
+}
+
+#logBox {
+  height: 150px;
+  overflow-y: auto;
+  background: rgba(0,0,0,0.5);
+  padding: 10px;
+  border-radius: 10px;
 }

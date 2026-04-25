@@ -1,21 +1,49 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>ThreadPool Dashboard</title>
-    <link rel="stylesheet" href="style.css">
+  <title>ThreadPool Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
+
 <body>
 
-<h1>ThreadPool Dashboard</h1>
+<header>
+  <h1>⚙️ ThreadPool Monitor</h1>
+</header>
 
-<button onclick="submitTask()">Submit Task</button>
-<button onclick="cancelTasks()">Cancel Pending</button>
+<div class="container">
 
-<div class="card">
-    <h2>Stats</h2>
-    <p id="active"></p>
-    <p id="queued"></p>
-    <p id="completed"></p>
+  <div class="controls">
+    <button onclick="submitTask()">Submit Task</button>
+    <button onclick="cancelTasks()">Cancel Pending</button>
+    <button onclick="shutdown()">Shutdown</button>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <h3>Active Threads</h3>
+      <p id="active">0</p>
+    </div>
+    <div class="card">
+      <h3>Queued Tasks</h3>
+      <p id="queued">0</p>
+    </div>
+    <div class="card">
+      <h3>Completed Tasks</h3>
+      <p id="completed">0</p>
+    </div>
+  </div>
+
+  <div class="charts">
+    <canvas id="chart"></canvas>
+  </div>
+
+  <div class="log">
+    <h3>Activity Log</h3>
+    <div id="logBox"></div>
+  </div>
+
 </div>
 
 <script src="script.js"></script>

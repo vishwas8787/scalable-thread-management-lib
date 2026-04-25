@@ -1,106 +1,176 @@
-#include <iostream>
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <thread>
-#include <fstream>
-#include <sstream>
+// server.cpp
 
 #include "threadpool.h"
 #include "tasks.h"
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <cstring>
+#include <mutex>
 
+// Windows headers
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #pragma comment(lib, "ws2_32.lib")
 
-ThreadPool pool(4);
+std::mutex printMutex;
 
-std::string readFile(const std::string& path) {
-    std::ifstream file(path);
-    std::stringstream buffer;
-    buffer << file.rdbuf();
-    return buffer.str();
+ThreadPool* globalPool = nullptr;
+
+// ── Build JSON stats response ─────────────────────────────────────
+std::string getStatsJson() {
+    std::ostringstream json;
+    json << "{"
+         << "\"active\":"      << globalPool->getActiveThreads()     << ","
+         << "\"queued\":"      << globalPool->getQueuedTasks()       << ","
+         << "\"completed\":"   << globalPool->getCompletedTasks()    << ","
+         << "\"numThreads\":"  << globalPool->getNumThreads()        << ","
+         << "\"cpu\":"         << globalPool->getCpuCompleted()      << ","
+         << "\"io\":"          << globalPool->getIoCompleted()       << ","
+         << "\"fib\":"         << globalPool->getFibCompleted()      << ","
+         << "\"totalTime\":"   << globalPool->getTotalExecutionTime()<< ","
+         << "\"cpuTime\":"     << globalPool->getCpuTime()           << ","
+         << "\"ioTime\":"      << globalPool->getIoTime()            << ","
+         << "\"fibTime\":"     << globalPool->getFibTime()           << ","
+         << "\"avgCpu\":"      << globalPool->getAvgCpuTime()        << ","
+         << "\"avgIo\":"       << globalPool->getAvgIoTime()         << ","
+         << "\"avgFib\":"      << globalPool->getAvgFibTime()        << ","
+         << "\"overallAvg\":"  << globalPool->getOverallAvgTime()    << ","
+         << "\"throughput\":"  << globalPool->getThroughput()
+         << "}";
+    return json.str();
 }
 
-std::string makeResponse(const std::string& body, const std::string& type) {
-    return "HTTP/1.1 200 OK\r\nContent-Type: " + type + "\r\n\r\n" + body;
+// ── Send HTTP response ────────────────────────────────────────────
+void sendResponse(SOCKET client, const std::string& body,
+                  const std::string& contentType = "application/json") {
+    std::ostringstream resp;
+    resp << "HTTP/1.1 200 OK\r\n"
+         << "Content-Type: " << contentType << "\r\n"
+         << "Access-Control-Allow-Origin: *\r\n"
+         << "Content-Length: " << body.size() << "\r\n"
+         << "Connection: close\r\n\r\n"
+         << body;
+    std::string r = resp.str();
+    send(client, r.c_str(), (int)r.size(), 0);
 }
 
-void handleClient(SOCKET clientSocket) {
-    char buffer[2048] = {0};
-    recv(clientSocket, buffer, sizeof(buffer), 0);
+// ── Parse path from HTTP request line ────────────────────────────
+std::string parsePath(const std::string& request) {
+    size_t start = request.find(' ');
+    if (start == std::string::npos) return "/";
+    size_t end = request.find(' ', start + 1);
+    if (end == std::string::npos) return "/";
+    return request.substr(start + 1, end - start - 1);
+}
 
-    std::string request(buffer);
-    std::string response;
-
-    // 🔹 Static files
-    if (request.find("GET / ") != std::string::npos) {
-        response = makeResponse(readFile("index.html"), "text/html");
-    }
-    else if (request.find("GET /style.css") != std::string::npos) {
-        response = makeResponse(readFile("style.css"), "text/css");
-    }
-    else if (request.find("GET /script.js") != std::string::npos) {
-        response = makeResponse(readFile("script.js"), "application/javascript");
-    }
-
-    // 🔹 API
-    else if (request.find("GET /submit") != std::string::npos) {
-        static int i = 0;
-        int id=i;
-
-        TaskType type;
-        if (i % 3 == 0) type = TaskType::CPU;
-        else if (i % 3 == 1) type = TaskType::IO;
-        else type = TaskType::FIB;
-
-        pool.submit(type, [id, type]() {
-            if (type == TaskType::CPU) cpuTask(i);
-            else if (type == TaskType::IO) ioTask(i);
-            else fibTask(i);
-        },2);
-
-        i++;
-        response = makeResponse("OK", "text/plain");
-    }
-    else if (request.find("GET /stats") != std::string::npos) {
-        std::string body =
-            "Active: " + std::to_string(pool.getActiveThreads()) + "\n" +
-            "Queued: " + std::to_string(pool.getQueuedTasks()) + "\n" +
-            "Completed: " + std::to_string(pool.getCompletedTasks());
-
-        response = makeResponse(body, "text/plain");
-    }
-    else if (request.find("GET /cancel") != std::string::npos) {
-        pool.cancelPendingTasks();
-        response = makeResponse("Cancelled", "text/plain");
-    }
-    else {
-        response = "HTTP/1.1 404 Not Found\r\n\r\n";
-    }
-
-    send(clientSocket, response.c_str(), response.size(), 0);
-    closesocket(clientSocket);
+// ── Parse query param value ───────────────────────────────────────
+std::string parseParam(const std::string& path, const std::string& key) {
+    size_t pos = path.find(key + "=");
+    if (pos == std::string::npos) return "";
+    size_t start = pos + key.size() + 1;
+    size_t end = path.find('&', start);
+    return path.substr(start, end == std::string::npos ? std::string::npos : end - start);
 }
 
 int main() {
+    // Init winsock
     WSADATA wsa;
     WSAStartup(MAKEWORD(2, 2), &wsa);
 
-    SOCKET serverSocket = socket(AF_INET, SOCK_STREAM, 0);
+    globalPool = new ThreadPool(4);
+    std::cout << "=== Thread Pool GUI Server ===\n";
+    std::cout << "Open dashboard.html in your browser\n";
+    std::cout << "Server running on http://localhost:8080\n\n";
 
-    sockaddr_in serverAddr{};
-    serverAddr.sin_family = AF_INET;
-    serverAddr.sin_port = htons(8080);
-    serverAddr.sin_addr.s_addr = INADDR_ANY;
+    SOCKET server = socket(AF_INET, SOCK_STREAM, 0);
 
-    bind(serverSocket, (sockaddr*)&serverAddr, sizeof(serverAddr));
-    listen(serverSocket, 5);
+    // Allow port reuse
+    int opt = 1;
+    setsockopt(server, SOL_SOCKET, SO_REUSEADDR, (char*)&opt, sizeof(opt));
 
-    std::cout << "Server running at http://localhost:8080\n";
+    sockaddr_in addr{};
+    addr.sin_family      = AF_INET;
+    addr.sin_addr.s_addr = INADDR_ANY;
+    addr.sin_port        = htons(8080);
+
+    bind(server, (sockaddr*)&addr, sizeof(addr));
+    listen(server, 10);
 
     while (true) {
-        SOCKET clientSocket = accept(serverSocket, nullptr, nullptr);
-        std::thread(handleClient, clientSocket).detach();
+        SOCKET client = accept(server, nullptr, nullptr);
+        if (client == INVALID_SOCKET) continue;
+
+        char buf[4096] = {};
+        recv(client, buf, sizeof(buf) - 1, 0);
+        std::string request(buf);
+        std::string path = parsePath(request);
+
+        // ── GET /stats ──────────────────────────────────────────
+        if (path == "/stats") {
+            sendResponse(client, getStatsJson());
+        }
+
+        // ── POST /submit?count=N ────────────────────────────────
+        else if (path.rfind("/submit", 0) == 0) {
+            std::string countStr = parseParam(path, "count");
+            int count = countStr.empty() ? 5 : std::stoi(countStr);
+
+            for (int i = 0; i < count; i++) {
+                TaskType type;
+                int priority;
+                if      (i % 3 == 0) { type = TaskType::CPU; priority = 3; }
+                else if (i % 3 == 1) { type = TaskType::IO;  priority = 2; }
+                else                  { type = TaskType::FIB; priority = 1; }
+
+                try {
+                    globalPool->submit(type, [i, type]() {
+                        switch (type) {
+                            case TaskType::CPU: cpuTask(i); break;
+                            case TaskType::IO:  ioTask(i);  break;
+                            case TaskType::FIB: fibTask(i); break;
+                        }
+                    }, priority);
+                } catch (...) {}
+            }
+            sendResponse(client, "{\"status\":\"submitted\",\"count\":" + std::to_string(count) + "}");
+        }
+
+        // ── POST /cancel ────────────────────────────────────────
+        else if (path.rfind("/cancel", 0) == 0) {
+            globalPool->cancelPendingTasks();
+            sendResponse(client, "{\"status\":\"cancelled\"}");
+        }
+
+        // ── POST /reset?threads=N ───────────────────────────────
+        else if (path.rfind("/reset", 0) == 0) {
+            std::string tStr = parseParam(path, "threads");
+            int threads = tStr.empty() ? 4 : std::stoi(tStr);
+            if (threads < 1)  threads = 1;
+            if (threads > 256) threads = 256;
+            globalPool->shutdown();
+            delete globalPool;
+            globalPool = new ThreadPool(threads);
+            std::cout << "Pool reset: now running " << threads << " thread(s)\n";
+            sendResponse(client, "{\"status\":\"reset\",\"threads\":" + std::to_string(threads) + "}");
+        }
+
+        else {
+            std::string body = "Not Found";
+            std::ostringstream resp;
+            resp << "HTTP/1.1 404 Not Found\r\nContent-Length: "
+                 << body.size() << "\r\n\r\n" << body;
+            std::string r = resp.str();
+            send(client, r.c_str(), (int)r.size(), 0);
+        }
+
+        closesocket(client);
     }
 
-    closesocket(serverSocket);
+    delete globalPool;
     WSACleanup();
+    return 0;
 }
+
+
+// server.cpp
