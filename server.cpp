@@ -2,6 +2,9 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <thread>
+#include <fstream>
+#include <sstream>
+
 #include "threadpool.h"
 #include "tasks.h"
 
@@ -9,8 +12,14 @@
 
 ThreadPool pool(4);
 
-// 🔥 Build HTTP response
-std::string makeResponse(const std::string& body, const std::string& type = "text/html") {
+std::string readFile(const std::string& path) {
+    std::ifstream file(path);
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    return buffer.str();
+}
+
+std::string makeResponse(const std::string& body, const std::string& type) {
     return "HTTP/1.1 200 OK\r\nContent-Type: " + type + "\r\n\r\n" + body;
 }
 
@@ -19,50 +28,52 @@ void handleClient(SOCKET clientSocket) {
     recv(clientSocket, buffer, sizeof(buffer), 0);
 
     std::string request(buffer);
-    std::cout << "---- REQUEST ----\n" << request << "\n";
-
     std::string response;
 
-    // 🔥 ROUTES
-
-    // Home page
+    // 🔹 Static files
     if (request.find("GET / ") != std::string::npos) {
-        std::string body =
-            "<h1>ThreadPool Server</h1>"
-            "<a href='/submit'>Submit Task</a><br>"
-            "<a href='/stats'>View Stats</a><br>"
-            "<a href='/cancel'>Cancel Tasks</a>";
-
-        response = makeResponse(body);
+        response = makeResponse(readFile("index.html"), "text/html");
+    }
+    else if (request.find("GET /style.css") != std::string::npos) {
+        response = makeResponse(readFile("style.css"), "text/css");
+    }
+    else if (request.find("GET /script.js") != std::string::npos) {
+        response = makeResponse(readFile("script.js"), "application/javascript");
     }
 
-    // Submit task
+    // 🔹 API
     else if (request.find("GET /submit") != std::string::npos) {
-        pool.submit(TaskType::CPU, []() { cpuTask(1); }, 2);
-        response = makeResponse("<h2>Task Submitted</h2><a href='/'>Back</a>");
-    }
+        static int i = 0;
+        int id=i;
 
-    // Stats
+        TaskType type;
+        if (i % 3 == 0) type = TaskType::CPU;
+        else if (i % 3 == 1) type = TaskType::IO;
+        else type = TaskType::FIB;
+
+        pool.submit(type, [id, type]() {
+            if (type == TaskType::CPU) cpuTask(i);
+            else if (type == TaskType::IO) ioTask(i);
+            else fibTask(i);
+        },2);
+
+        i++;
+        response = makeResponse("OK", "text/plain");
+    }
     else if (request.find("GET /stats") != std::string::npos) {
         std::string body =
-            "<h2>Stats</h2>"
-            "Active: " + std::to_string(pool.getActiveThreads()) + "<br>"
-            "Queued: " + std::to_string(pool.getQueuedTasks()) + "<br>"
-            "Completed: " + std::to_string(pool.getCompletedTasks()) + "<br><br>"
-            "<a href='/'>Back</a>";
+            "Active: " + std::to_string(pool.getActiveThreads()) + "\n" +
+            "Queued: " + std::to_string(pool.getQueuedTasks()) + "\n" +
+            "Completed: " + std::to_string(pool.getCompletedTasks());
 
-        response = makeResponse(body);
+        response = makeResponse(body, "text/plain");
     }
-
-    // Cancel tasks
     else if (request.find("GET /cancel") != std::string::npos) {
         pool.cancelPendingTasks();
-        response = makeResponse("<h2>Pending Tasks Cancelled</h2><a href='/'>Back</a>");
+        response = makeResponse("Cancelled", "text/plain");
     }
-
-    // Not found
     else {
-        response = "HTTP/1.1 404 Not Found\r\n\r\n404 Not Found";
+        response = "HTTP/1.1 404 Not Found\r\n\r\n";
     }
 
     send(clientSocket, response.c_str(), response.size(), 0);
@@ -92,5 +103,4 @@ int main() {
 
     closesocket(serverSocket);
     WSACleanup();
-    return 0;
 }
