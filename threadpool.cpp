@@ -18,7 +18,7 @@ ThreadPool::ThreadPool(int numThreads):stop(false),
     
         for (int i = 0; i < numThreads; i++) {
         workers.emplace_back(&ThreadPool::worker, this);
-    }
+        }
 }
 void ThreadPool::worker() {
     while (true) {
