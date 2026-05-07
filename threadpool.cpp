@@ -4,6 +4,7 @@
 #include <stdexcept>
 #include "tasks.h"
 #include <chrono>
+
 ThreadPool::ThreadPool(int numThreads):stop(false),
     activeThreads(0),
     completedTasks(0),
